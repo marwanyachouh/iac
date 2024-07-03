@@ -1,0 +1,58 @@
+pipeline {
+    agent any
+
+    environment {
+        ANSIBLE_HOST_KEY_CHECKING = 'False'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Terraform Init and Apply') {
+            steps {
+                sh 'terraform init'
+                sh 'terraform apply -auto-approve'
+            }
+        }
+        stage('Run Ansible Playbook') {
+            steps {
+                script {
+                    def vm_ip = sh(script: 'terraform output -raw vm_ip', returnStdout: true).trim()
+                    sh "ansible-playbook -i ${vm_ip}, playbook.yml"
+                }
+            }
+        }
+        stage('Verification') {
+            steps {
+                script {
+                    def vm_ip = sh(script: 'terraform output -raw vm_ip', returnStdout: true).trim()
+                    sh """
+                        echo "Verifying the setup on ${vm_ip}" > verification_report.txt
+                        # Verify that Nginx is installed and running
+                        ansible -i ${vm_ip}, -m shell -a 'nginx -v' >> verification_report.txt 2>&1
+                        ansible -i ${vm_ip}, -m shell -a 'systemctl status nginx' >> verification_report.txt 2>&1
+                        echo "Verification complete. Report generated." >> verification_report.txt
+                    """
+                }
+            }
+        }
+        stage('Archive Report') {
+            steps {
+                archiveArtifacts artifacts: 'verification_report.txt', allowEmptyArchive: true
+            }
+        }
+        stage('Terraform Destroy') {
+            steps {
+                sh 'terraform destroy -auto-approve'
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
