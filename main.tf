@@ -5,7 +5,7 @@ provider "virtualbox" {
 resource "virtualbox_vm" "example" {
   name      = "ansible-vm"
   image     = "ubuntu/bionic64"
-  cpus      = 1
+  cpus      = 2
   memory    = 1024
   network_adapter {
     type    = "hostonly"
